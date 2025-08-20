@@ -76,7 +76,7 @@ const ZoomableTimeline = () => {
     const timeRange = getTimeRange();
     const startTime = centerTime - timeRange / 2;
     const endTime = centerTime + timeRange / 2;
-    const containerWidth = timelineRef.current?.clientWidth || window.innerWidth;
+    const containerWidth = timelineRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1000);
 
     // Minimum pixels between labels
     const minLabelSpacingPx = 60;

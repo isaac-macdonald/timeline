@@ -1,6 +1,10 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+// 👇 import your provider
+import { BirthdayProvider } from "@/app/context/BirthdayContext"; // adjust path if needed
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,17 +22,20 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-  children,
-}: Readonly<{
+                                     children,
+                                   }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+    <body
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+    >
+    {/* 👇 wrap entire app in provider */}
+    <BirthdayProvider>
+      {children}
+    </BirthdayProvider>
+    </body>
     </html>
   );
 }

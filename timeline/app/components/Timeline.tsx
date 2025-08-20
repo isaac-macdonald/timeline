@@ -8,6 +8,7 @@ interface Tick {
   position: number;
   label: string;
   height: number;
+  width: number;
 }
 
 const TIME_UNITS = [
@@ -35,10 +36,17 @@ const ZoomableTimeline = () => {
   const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25;
 
 
-  // Update current time
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(interval);
+    let animationFrameId: number;
+
+    const updateTime = () => {
+      setCurrentTime(Date.now()); // or performance.now() for higher precision
+      animationFrameId = requestAnimationFrame(updateTime);
+    };
+
+    animationFrameId = requestAnimationFrame(updateTime);
+
+    return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
   // Calculate visible time range based on zoom
@@ -96,7 +104,8 @@ const ZoomableTimeline = () => {
       const numTicks = Math.ceil(timeRange / unit.ms);
       if (numTicks <= 0 || numTicks > 500) continue;
 
-      const height = Math.max(1, Math.min(50, 50 * (unit.ms / timeRange)));
+      const height = Math.max(3, Math.min(75, 75 * (unit.ms / timeRange)));
+      const width = Math.max(1, Math.min(3, 3 * (unit.ms / timeRange)));
       const firstTick = Math.floor(startTime / unit.ms) * unit.ms;
 
       for (let t = firstTick; t <= endTime; t += unit.ms) {
@@ -107,6 +116,7 @@ const ZoomableTimeline = () => {
           time: t,
           position,
           height,
+          width,
           label: labelUnit === unit ? formatTime(t, unit.name) : ''
         });
       }
@@ -207,7 +217,7 @@ const ZoomableTimeline = () => {
           >
             <div
               className="bg-black w-0.5"
-              style={{ height: `${tick.height}px`, transform: 'translateY(-50%)' }}
+              style={{ height: `${tick.height}px`, width: `${tick.width}px`,transform: 'translateY(-50%)' }}
             ></div>
             <div className="absolute top-6 -translate-x-1/2 text-xs whitespace-nowrap">
               {tick.label}
@@ -215,14 +225,6 @@ const ZoomableTimeline = () => {
           </div>
         ))}
 
-        {currentTimePosition >= 0 && currentTimePosition <= 100 && (
-          <div
-            className="absolute top-1/2 w-0.5 bg-red-500 z-10"
-            style={{ left: `${currentTimePosition}%`, height: '100%', transform: 'translateY(-50%)' }}
-          >
-            <div className="absolute -top-8 -translate-x-1/2 text-red-400 text-xs font-bold whitespace-nowrap">NOW</div>
-          </div>
-        )}
 
         {birthdayPosition !== null &&
           birthdayPosition >= 0 &&
@@ -271,6 +273,49 @@ const ZoomableTimeline = () => {
               }}
             />
           )}
+        {/* Past shading */}
+        {currentTimePosition > 0 && (
+          <>
+            {/* Past shading */}
+            <div
+              className="absolute top-0 h-full bg-gray-200 opacity-40 z-0"
+              style={{
+                left: 0,
+                width: `${currentTimePosition}%`,
+              }}
+            />
+
+            {/* Labels at the divide */}
+            <div
+              className="absolute top-2 text-gray-400 z-10"
+              style={{
+                left: `${currentTimePosition}%`,
+                transform: 'translateX(-102%)',
+                marginRight: '4px',
+                fontWeight: 400,           // boldness
+                fontSize: '18px',          // font size
+                fontFamily: 'Arial, sans-serif', // font family
+                whiteSpace: 'nowrap',
+              }}
+            >
+              THE UNSTOPPABLE MARCH OF TIME
+            </div>
+
+            <div
+              className="absolute top-2 text-gray-400 z-10"
+              style={{
+                left: `${currentTimePosition}%`,
+                transform: 'translateX(0%)',
+                marginLeft: '4px',
+                fontWeight: 400,
+                fontSize: '18px',
+                fontFamily: 'Arial, sans-serif',
+              }}
+            >
+            </div>
+          </>
+        )}
+
 
         <div className="absolute bottom-4 right-4 text-gray-400 text-sm">
           <div>Mouse wheel: Zoom in/out</div>

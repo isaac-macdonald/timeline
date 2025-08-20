@@ -13,7 +13,7 @@ export default function HamburgerMenu() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed top-4 left-4 z-50 p-2 bg-white text-black rounded-md"
+          className="fixed top-8 left-4 z-50 p-2 bg-white text-black rounded-md"
         >
           <Menu />
         </button>

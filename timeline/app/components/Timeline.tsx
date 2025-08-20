@@ -230,7 +230,7 @@ const ZoomableTimeline = () => {
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
         <motion.div
-          className="absolute top-4 left-16 bg-white/80 backdrop-blur-md shadow-md rounded-lg px-3 py-1 text-xs text-gray-700 z-50"
+          className="absolute top-8 left-16 bg-white/80 backdrop-blur-md shadow-md rounded-lg px-3 py-1 text-xs text-gray-700 z-50"
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}

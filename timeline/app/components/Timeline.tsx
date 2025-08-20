@@ -198,7 +198,7 @@ const ZoomableTimeline = () => {
       ? ((birthday.getTime() + 73 * MS_PER_YEAR - startTime) / timeRange) * 100
       : null;
 
-  function formatDatePretty(date: any) {
+  function formatDatePretty(date: Date) {
     const day = date.getDate();
 
     // Add suffix (st, nd, rd, th)

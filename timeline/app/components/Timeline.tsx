@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useBirthday } from '@/app/context/BirthdayContext';
+import { motion } from 'framer-motion';
 
 interface Tick {
   time: number;
@@ -197,6 +198,27 @@ const ZoomableTimeline = () => {
       ? ((birthday.getTime() + 73 * MS_PER_YEAR - startTime) / timeRange) * 100
       : null;
 
+  function formatDatePretty(date: any) {
+    const day = date.getDate();
+
+    // Add suffix (st, nd, rd, th)
+    const suffix =
+      day % 10 === 1 && day !== 11
+        ? "st"
+        : day % 10 === 2 && day !== 12
+          ? "nd"
+          : day % 10 === 3 && day !== 13
+            ? "rd"
+            : "th";
+
+    const month = date.toLocaleString("default", { month: "long" });
+    const year = date.getFullYear();
+
+    return `${day}${suffix} ${month} ${year}`;
+  }
+
+
+
   return (
     <div className="w-full h-screen bg-white text-black overflow-hidden">
 
@@ -207,6 +229,17 @@ const ZoomableTimeline = () => {
         onMouseDown={handleMouseDown}
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
+        <motion.div
+          className="absolute top-4 left-16 bg-white/80 backdrop-blur-md shadow-md rounded-lg px-3 py-1 text-xs text-gray-700 z-50"
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <span className="font-semibold">Time range:</span>{" "}
+          {formatDatePretty(new Date(startTime))} –{" "}
+          {formatDatePretty(new Date(centerTime + getTimeRange() / 2))}
+        </motion.div>
+
         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-black"></div>
 
         {ticks.map((tick, idx) => (
@@ -335,6 +368,8 @@ const ZoomableTimeline = () => {
           <div>Mouse wheel: Zoom in/out</div>
           <div>Click & drag: Pan timeline</div>
         </div>
+
+
       </div>
     </div>
   );

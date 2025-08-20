@@ -273,6 +273,20 @@ const ZoomableTimeline = () => {
               }}
             />
           )}
+
+        {currentTimePosition !== null &&
+          currentTimePosition >= 0 &&
+          currentTimePosition <= 100 && (
+            <div
+              className="absolute top-1/2 w-0.5 bg-gray-400 z-10"
+              style={{
+                left: `${currentTimePosition}%`,
+                height: "100%",
+                transform: "translateY(-50%)",
+              }}
+            >
+            </div>
+          )}
         {/* Past shading */}
         {currentTimePosition > 0 && (
           <>

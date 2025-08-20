@@ -243,22 +243,22 @@ const ZoomableTimeline = () => {
             </div>
           )}
 
-        {expectedDeathPosition !== null &&
-          expectedDeathPosition >= 0 &&
-          expectedDeathPosition <= 100 && (
-            <div
-              className="absolute top-1/2 w-0.5 bg-blue-500 z-10"
-              style={{
-                left: `${expectedDeathPosition}%`,
-                height: "100%",
-                transform: "translateY(-50%)",
-              }}
-            >
-              <div className="absolute -top-8 -translate-x-1/2 text-blue-400 text-xs font-bold whitespace-nowrap">
-                BIRTHDAY
-              </div>
-            </div>
-          )}
+        {/*{expectedDeathPosition !== null &&*/}
+        {/*  expectedDeathPosition >= 0 &&*/}
+        {/*  expectedDeathPosition <= 100 && (*/}
+        {/*    <div*/}
+        {/*      className="absolute top-1/2 w-0.5 bg-blue-500 z-10"*/}
+        {/*      style={{*/}
+        {/*        left: `${expectedDeathPosition}%`,*/}
+        {/*        height: "100%",*/}
+        {/*        transform: "translateY(-50%)",*/}
+        {/*      }}*/}
+        {/*    >*/}
+        {/*      <div className="absolute -top-8 -translate-x-1/2 text-blue-400 text-xs font-bold whitespace-nowrap">*/}
+        {/*        BIRTHDAY*/}
+        {/*      </div>*/}
+        {/*    </div>*/}
+        {/*  )}*/}
 
         {birthdayPosition !== null &&
           currentTimePosition >= 0 &&
@@ -278,7 +278,7 @@ const ZoomableTimeline = () => {
           currentTimePosition >= 0 &&
           currentTimePosition <= 100 && (
             <div
-              className="absolute top-1/2 w-0.5 bg-gray-400 z-10"
+              className="absolute top-1/2 w-0.5 bg-gray-500 z-10"
               style={{
                 left: `${currentTimePosition}%`,
                 height: "100%",

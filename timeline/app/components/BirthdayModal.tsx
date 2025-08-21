@@ -1,6 +1,6 @@
 // components/BirthdayModal.tsx
 "use client";
-import { useBirthday } from "@/app/context/BirthdayContext";
+import { useBirthday } from "@/app/context/Context";
 import { useState } from "react";
 
 export default function BirthdayModal({ onClose }: { onClose: () => void }) {

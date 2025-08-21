@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 // 👇 import your provider
-import { BirthdayProvider } from "@/app/context/BirthdayContext";
+import { AppProviders, BirthdayProvider } from '@/app/context/Context';
 import { ClerkProvider } from '@clerk/nextjs'; // adjust path if needed
 
 const geistSans = Geist({
@@ -34,9 +34,9 @@ export default function RootLayout({
     >
     {/* 👇 wrap entire app in provider */}
     <ClerkProvider>
-      <BirthdayProvider>
+      <AppProviders>
         {children}
-      </BirthdayProvider>
+      </AppProviders>
     </ClerkProvider>
     </body>
     </html>

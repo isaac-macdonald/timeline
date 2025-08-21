@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useBirthday } from '@/app/context/BirthdayContext';
+import { useBirthday } from '@/app/context/Context';
+import { useTimeline } from '@/app/context/Context'; // ✅ import global state
 import { motion } from 'framer-motion';
+import HoverLine from '@/app/components/StaticLine';
 
 interface Tick {
   time: number;
@@ -11,8 +13,13 @@ interface Tick {
   height: number;
 }
 
+interface Marker {
+  date: Date;
+  color: string;
+}
+
 const TIME_UNITS = [
-  { name: 'millennia', ms: 1000 * 60 * 60 * 24 * 365.25 * 1000 }, // 1000 years
+  { name: 'millennia', ms: 1000 * 60 * 60 * 24 * 365.25 * 1000 },
   { name: 'centuries', ms: 1000 * 60 * 60 * 24 * 365.25 * 100 },
   { name: 'decades', ms: 1000 * 60 * 60 * 24 * 365.25 * 10 },
   { name: 'years', ms: 1000 * 60 * 60 * 24 * 365.25 },
@@ -22,40 +29,62 @@ const TIME_UNITS = [
   { name: 'minutes', ms: 1000 * 60 }
 ];
 
+const MIN_ZOOM_DURATION = 60 * 1000;
+const MAX_ZOOM_DURATION = 3000 * 365.25 * 24 * 60 * 60 * 1000;
+const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25;
+
 const ZoomableTimeline = () => {
   const { birthday } = useBirthday();
-  const [zoom, setZoom] = useState(0.5); // 0 = far out, 1 = fully zoomed in
-  const [centerTime, setCenterTime] = useState(Date.now());
-  const [isDragging, setIsDragging] = useState(false);
-  const [lastMouseX, setLastMouseX] = useState(0);
+  const {
+    zoom,
+    setZoom,
+    centerTime,
+    setCenterTime,
+    getTimeRange
+  } = useTimeline(); // ✅ now reading/writing from context
+
+  const [markers, setMarkers] = useState<Marker[]>([]);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; date: Date } | null>(null);
+  const [newMarkerDate, setNewMarkerDate] = useState<Date | null>(null);
+  const [newMarkerColor, setNewMarkerColor] = useState<string>('#ff0000');
+
   const [currentTime, setCurrentTime] = useState(Date.now());
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  const MIN_ZOOM_DURATION = 60 * 1000; // 1 minute
-  const MAX_ZOOM_DURATION = 3000 * 365.25 * 24 * 60 * 60 * 1000; // year 3000
-  const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25;
+  const handleRightClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!timelineRef.current) return;
 
+    const rect = timelineRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const containerWidth = rect.width;
+
+    const timeRange = getTimeRange();
+    const startTime = centerTime - timeRange / 2;
+    const clickedTime = startTime + (clickX / containerWidth) * timeRange;
+
+    setContextMenu({ x: e.clientX, y: e.clientY, date: new Date(clickedTime) });
+    setNewMarkerDate(new Date(clickedTime));
+    setNewMarkerColor('#ff0000');
+  };
+
+  const handleAddMarker = () => {
+    if (!newMarkerDate) return;
+    setMarkers(prev => [...prev, { date: newMarkerDate, color: newMarkerColor }]);
+    setContextMenu(null);
+  };
 
   useEffect(() => {
     let animationFrameId: number;
 
     const updateTime = () => {
-      setCurrentTime(Date.now()); // or performance.now() for higher precision
+      setCurrentTime(Date.now());
       animationFrameId = requestAnimationFrame(updateTime);
     };
 
     animationFrameId = requestAnimationFrame(updateTime);
-
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
-
-  // Calculate visible time range based on zoom
-  const getTimeRange = useCallback(() => {
-    const min = MIN_ZOOM_DURATION;       // 1 minute
-    const max = MAX_ZOOM_DURATION;       // 3000 years
-    const range = max / min;             // ratio
-    return min * Math.pow(range, 1 - zoom); // zoom = 1 → min, zoom = 0 → max
-  }, [zoom]);
 
   const formatTime = useCallback((timestamp: number, unit: string) => {
     const date = new Date(timestamp);
@@ -70,7 +99,6 @@ const ZoomableTimeline = () => {
       case 'days':
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       case 'hours':
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       case 'minutes':
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       default:
@@ -136,8 +164,6 @@ const ZoomableTimeline = () => {
     }
   }
 
-
-  // Generate hierarchical ticks
   const generateTicks = useCallback((): Tick[] => {
     const ticks: Tick[] = [];
     const timeRange = getTimeRange();
@@ -147,11 +173,8 @@ const ZoomableTimeline = () => {
       timelineRef.current?.clientWidth ||
       (typeof window !== "undefined" ? window.innerWidth : 1000);
 
-    // Minimum pixels between labels
     const minLabelSpacingPx = 60;
 
-    // Choose which unit gets labels: pick the smallest unit whose *actual* tick spacing
-    // on screen is at least minLabelSpacingPx.
     let labelUnit: typeof TIME_UNITS[0] | null = null;
     for (let i = TIME_UNITS.length - 1; i >= 0; i--) {
       const unit = TIME_UNITS[i];
@@ -165,9 +188,7 @@ const ZoomableTimeline = () => {
       }
     }
 
-    // Build ticks per unit using calendar-aware stepping
     for (const unit of TIME_UNITS) {
-      // Estimate how many ticks (using actual delta for this unit near startTime)
       const first = floorToUnit(startTime, unit.name);
       const next = addOne(first, unit.name);
       const deltaMs = Math.max(1, next - first);
@@ -175,10 +196,8 @@ const ZoomableTimeline = () => {
       const estimatedCount = Math.ceil(timeRange / deltaMs) + 2;
       if (estimatedCount <= 0 || estimatedCount > 1000) continue;
 
-      // Height scales smoothly with actual delta vs range
       const height = Math.max(1, Math.min(50, 50 * (deltaMs / timeRange)));
 
-      // Walk by calendar unit boundaries
       for (let t = first; t <= endTime; t = addOne(t, unit.name)) {
         const position = ((t - startTime) / timeRange) * 100;
         if (position < -5 || position > 105) continue;
@@ -195,18 +214,15 @@ const ZoomableTimeline = () => {
     return ticks;
   }, [centerTime, formatTime, getTimeRange]);
 
-
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     if (!timelineRef.current) return;
 
     if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-      // Horizontal scroll → pan timeline
       const timeRange = getTimeRange();
       const timeDelta = (e.deltaX / window.innerWidth) * timeRange;
-      setCenterTime(prev => prev + timeDelta);
+      setCenterTime((prev: number) => prev + timeDelta);
     } else {
-      // Vertical scroll → zoom
       const rect = timelineRef.current.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const containerWidth = rect.width;
@@ -230,7 +246,7 @@ const ZoomableTimeline = () => {
         return newZoom;
       });
     }
-  }, [centerTime, getTimeRange]);
+  }, [centerTime, getTimeRange, setCenterTime, setZoom]);
 
   useEffect(() => {
     const timeline = timelineRef.current;
@@ -249,40 +265,20 @@ const ZoomableTimeline = () => {
   const birthdayPosition =
     birthday != null ? ((birthday.getTime() - startTime) / timeRange) * 100 : null;
 
-  const expectedDeathPosition =
-    birthday != null
-      ? ((birthday.getTime() + 73 * MS_PER_YEAR - startTime) / timeRange) * 100
-      : null;
-
   function formatDatePretty(date: Date) {
     const day = date.getDate();
-
-    // Add suffix (st, nd, rd, th)
     const suffix =
-      day % 10 === 1 && day !== 11
-        ? "st"
-        : day % 10 === 2 && day !== 12
-          ? "nd"
-          : day % 10 === 3 && day !== 13
-            ? "rd"
-            : "th";
-
+      day % 10 === 1 && day !== 11 ? "st" :
+        day % 10 === 2 && day !== 12 ? "nd" :
+          day % 10 === 3 && day !== 13 ? "rd" : "th";
     const month = date.toLocaleString("default", { month: "long" });
     const year = date.getFullYear();
-
     return `${day}${suffix} ${month} ${year}`;
   }
 
-
-
   return (
     <div className="w-full h-screen bg-white text-black overflow-hidden">
-
-
-      <div
-        ref={timelineRef}
-        className="relative w-full h-full cursor-default"
-      >
+      <div ref={timelineRef} onContextMenu={handleRightClick} className="relative w-full h-full cursor-default">
         <motion.div
           className="absolute top-8 left-16 bg-white/80 backdrop-blur-md shadow-md rounded-lg px-3 py-1 text-xs text-gray-700 z-50"
           initial={{ opacity: 0, y: -5 }}
@@ -312,7 +308,6 @@ const ZoomableTimeline = () => {
           </div>
         ))}
 
-
         {birthdayPosition !== null &&
           birthdayPosition >= 0 &&
           birthdayPosition <= 100 && (
@@ -329,23 +324,6 @@ const ZoomableTimeline = () => {
               </div>
             </div>
           )}
-
-        {/*{expectedDeathPosition !== null &&*/}
-        {/*  expectedDeathPosition >= 0 &&*/}
-        {/*  expectedDeathPosition <= 100 && (*/}
-        {/*    <div*/}
-        {/*      className="absolute top-1/2 w-0.5 bg-blue-500 z-10"*/}
-        {/*      style={{*/}
-        {/*        left: `${expectedDeathPosition}%`,*/}
-        {/*        height: "100%",*/}
-        {/*        transform: "translateY(-50%)",*/}
-        {/*      }}*/}
-        {/*    >*/}
-        {/*      <div className="absolute -top-8 -translate-x-1/2 text-blue-400 text-xs font-bold whitespace-nowrap">*/}
-        {/*        BIRTHDAY*/}
-        {/*      </div>*/}
-        {/*    </div>*/}
-        {/*  )}*/}
 
         {birthdayPosition !== null &&
           currentTimePosition >= 0 &&
@@ -371,13 +349,11 @@ const ZoomableTimeline = () => {
                 height: "100%",
                 transform: "translateY(-50%)",
               }}
-            >
-            </div>
+            />
           )}
-        {/* Past shading */}
+
         {currentTimePosition > 0 && (
           <>
-            {/* Past shading */}
             <div
               className="absolute top-0 h-full bg-gray-200 opacity-40 z-0"
               style={{
@@ -385,44 +361,76 @@ const ZoomableTimeline = () => {
                 width: `${currentTimePosition}%`,
               }}
             />
-
-            {/* Labels at the divide */}
             <div
               className="absolute top-2 text-gray-400 z-10"
               style={{
                 left: `${currentTimePosition}%`,
                 transform: 'translateX(-102%)',
                 marginRight: '4px',
-                fontWeight: 400,           // boldness
-                fontSize: '18px',          // font size
-                fontFamily: 'Arial, sans-serif', // font family
+                fontWeight: 400,
+                fontSize: '18px',
+                fontFamily: 'Arial, sans-serif',
                 whiteSpace: 'nowrap',
               }}
             >
               THE UNSTOPPABLE MARCH OF TIME
             </div>
-
-            <div
-              className="absolute top-2 text-gray-400 z-10"
-              style={{
-                left: `${currentTimePosition}%`,
-                transform: 'translateX(0%)',
-                marginLeft: '4px',
-                fontWeight: 400,
-                fontSize: '18px',
-                fontFamily: 'Arial, sans-serif',
-              }}
-            >
-            </div>
           </>
         )}
-
 
         <div className="absolute bottom-4 right-4 text-gray-400 text-sm">
           <div>Scroll up/down: Zoom</div>
           <div>Scroll left/right: Pan timeline</div>
         </div>
 
+        {markers.map((marker, idx) => (
+          <HoverLine
+            key={idx}
+            referenceDateString={`${marker.date.getDate()}-${marker.date.getMonth() + 1}-${marker.date.getFullYear()}`}
+            lineColor={marker.color}
+            textColor={marker.color}
+          />
+        ))}
+
+        {/* Context menu */}
+        {contextMenu && (
+          <div
+            className="absolute bg-white shadow-md rounded-md p-2 z-50"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <div className="mb-2 font-semibold">Add Marker</div>
+            <div className="mb-2">
+              <label className="block text-xs font-medium">Date:</label>
+              <input
+                type="date"
+                value={newMarkerDate?.toISOString().slice(0, 10)}
+                onChange={e => setNewMarkerDate(new Date(e.target.value))}
+                className="border px-1 py-0.5 text-sm w-full"
+              />
+            </div>
+            <div className="mb-2">
+              <label className="block text-xs font-medium">Color:</label>
+              <input
+                type="color"
+                value={newMarkerColor}
+                onChange={e => setNewMarkerColor(e.target.value)}
+                className="w-full h-6 p-0 border-none"
+              />
+            </div>
+            <button
+              className="bg-blue-500 text-white px-2 py-1 rounded text-sm hover:bg-blue-600"
+              onClick={handleAddMarker}
+            >
+              Add
+            </button>
+            <button
+              className="ml-2 bg-gray-300 text-black px-2 py-1 rounded text-sm hover:bg-gray-400"
+              onClick={() => setContextMenu(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
 
       </div>
     </div>

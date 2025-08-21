@@ -221,7 +221,8 @@ const ZoomableTimeline = () => {
     if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
       const timeRange = getTimeRange();
       const timeDelta = (e.deltaX / window.innerWidth) * timeRange;
-      setCenterTime((prev: number) => prev + timeDelta);
+      const newCenter = centerTime + timeDelta;
+      setCenterTime(newCenter);
     } else {
       const rect = timelineRef.current.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -235,16 +236,14 @@ const ZoomableTimeline = () => {
       const zoomSpeed = 0.002;
       const deltaZoom = e.deltaY > 0 ? zoomSpeed : -zoomSpeed;
 
-      setZoom(prev => {
-        const newZoom = Math.max(0, Math.min(1, prev + deltaZoom));
-        const newTimeRange = MIN_ZOOM_DURATION *
-          Math.pow(MAX_ZOOM_DURATION / MIN_ZOOM_DURATION, 1 - newZoom);
-        const newStartTime = mouseTime - mouseRatio * newTimeRange;
-        const newCenter = newStartTime + newTimeRange / 2;
+      const newZoom = Math.max(0, Math.min(1, zoom + deltaZoom));
+      const newTimeRange = MIN_ZOOM_DURATION * Math.pow(MAX_ZOOM_DURATION / MIN_ZOOM_DURATION, 1 - newZoom);
+      const newStartTime = mouseTime - mouseRatio * newTimeRange;
+      const newCenter = newStartTime + newTimeRange / 2;
 
-        setCenterTime(newCenter);
-        return newZoom;
-      });
+      setZoom(newZoom);
+      setCenterTime(newCenter);
+
     }
   }, [centerTime, getTimeRange, setCenterTime, setZoom]);
 

@@ -9,7 +9,6 @@ interface Tick {
   position: number;
   label: string;
   height: number;
-  width: number;
 }
 
 const TIME_UNITS = [
@@ -79,37 +78,108 @@ const ZoomableTimeline = () => {
     }
   }, []);
 
+  function floorToUnit(startMs: number, unit: string): number {
+    const d = new Date(startMs);
+    switch (unit) {
+      case 'millennia': {
+        const y = Math.floor(d.getFullYear() / 1000) * 1000;
+        d.setFullYear(y, 0, 1);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      }
+      case 'centuries': {
+        const y = Math.floor(d.getFullYear() / 100) * 100;
+        d.setFullYear(y, 0, 1);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      }
+      case 'decades': {
+        const y = Math.floor(d.getFullYear() / 10) * 10;
+        d.setFullYear(y, 0, 1);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      }
+      case 'years':
+        d.setMonth(0, 1);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      case 'months':
+        d.setDate(1);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      case 'days':
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      case 'hours':
+        d.setMinutes(0, 0, 0);
+        return d.getTime();
+      case 'minutes':
+        d.setSeconds(0, 0);
+        return d.getTime();
+      default:
+        return startMs;
+    }
+  }
+
+  function addOne(ms: number, unit: string): number {
+    const d = new Date(ms);
+    switch (unit) {
+      case 'millennia': d.setFullYear(d.getFullYear() + 1000); return d.getTime();
+      case 'centuries': d.setFullYear(d.getFullYear() + 100); return d.getTime();
+      case 'decades':   d.setFullYear(d.getFullYear() + 10);  return d.getTime();
+      case 'years':     d.setFullYear(d.getFullYear() + 1);   return d.getTime();
+      case 'months':    d.setMonth(d.getMonth() + 1);         return d.getTime();
+      case 'days':      d.setDate(d.getDate() + 1);           return d.getTime();
+      case 'hours':     d.setHours(d.getHours() + 1);         return d.getTime();
+      case 'minutes':   d.setMinutes(d.getMinutes() + 1);     return d.getTime();
+      default:          return ms;
+    }
+  }
+
+
   // Generate hierarchical ticks
   const generateTicks = useCallback((): Tick[] => {
     const ticks: Tick[] = [];
     const timeRange = getTimeRange();
     const startTime = centerTime - timeRange / 2;
     const endTime = centerTime + timeRange / 2;
-    const containerWidth = timelineRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 1000);
+    const containerWidth =
+      timelineRef.current?.clientWidth ||
+      (typeof window !== "undefined" ? window.innerWidth : 1000);
 
     // Minimum pixels between labels
     const minLabelSpacingPx = 60;
 
-    // Determine which unit to show labels for
+    // Choose which unit gets labels: pick the smallest unit whose *actual* tick spacing
+    // on screen is at least minLabelSpacingPx.
     let labelUnit: typeof TIME_UNITS[0] | null = null;
     for (let i = TIME_UNITS.length - 1; i >= 0; i--) {
       const unit = TIME_UNITS[i];
-      const spacingPx = (unit.ms / timeRange) * containerWidth;
+      const first = floorToUnit(startTime, unit.name);
+      const next = addOne(first, unit.name);
+      const deltaMs = Math.max(1, next - first);
+      const spacingPx = (deltaMs / timeRange) * containerWidth;
       if (spacingPx >= minLabelSpacingPx) {
         labelUnit = unit;
         break;
       }
     }
 
+    // Build ticks per unit using calendar-aware stepping
     for (const unit of TIME_UNITS) {
-      const numTicks = Math.ceil(timeRange / unit.ms);
-      if (numTicks <= 0 || numTicks > 500) continue;
+      // Estimate how many ticks (using actual delta for this unit near startTime)
+      const first = floorToUnit(startTime, unit.name);
+      const next = addOne(first, unit.name);
+      const deltaMs = Math.max(1, next - first);
 
-      const height = Math.max(3, Math.min(75, 75 * (unit.ms / timeRange)));
-      const width = Math.max(1, Math.min(3, 3 * (unit.ms / timeRange)));
-      const firstTick = Math.floor(startTime / unit.ms) * unit.ms;
+      const estimatedCount = Math.ceil(timeRange / deltaMs) + 2;
+      if (estimatedCount <= 0 || estimatedCount > 1000) continue;
 
-      for (let t = firstTick; t <= endTime; t += unit.ms) {
+      // Height scales smoothly with actual delta vs range
+      const height = Math.max(1, Math.min(50, 50 * (deltaMs / timeRange)));
+
+      // Walk by calendar unit boundaries
+      for (let t = first; t <= endTime; t = addOne(t, unit.name)) {
         const position = ((t - startTime) / timeRange) * 100;
         if (position < -5 || position > 105) continue;
 
@@ -117,8 +187,7 @@ const ZoomableTimeline = () => {
           time: t,
           position,
           height,
-          width,
-          label: labelUnit === unit ? formatTime(t, unit.name) : ''
+          label: labelUnit?.name === unit.name ? formatTime(t, unit.name) : ''
         });
       }
     }
@@ -126,64 +195,51 @@ const ZoomableTimeline = () => {
     return ticks;
   }, [centerTime, formatTime, getTimeRange]);
 
+
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     if (!timelineRef.current) return;
 
-    const rect = timelineRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const containerWidth = rect.width;
-    const mouseRatio = mouseX / containerWidth;
+    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      // Horizontal scroll → pan timeline
+      const timeRange = getTimeRange();
+      const timeDelta = (e.deltaX / window.innerWidth) * timeRange;
+      setCenterTime(prev => prev + timeDelta);
+    } else {
+      // Vertical scroll → zoom
+      const rect = timelineRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const containerWidth = rect.width;
+      const mouseRatio = mouseX / containerWidth;
 
-    const oldTimeRange = getTimeRange();
-    const oldStartTime = centerTime - oldTimeRange / 2;
-    const mouseTime = oldStartTime + mouseRatio * oldTimeRange;
+      const oldTimeRange = getTimeRange();
+      const oldStartTime = centerTime - oldTimeRange / 2;
+      const mouseTime = oldStartTime + mouseRatio * oldTimeRange;
 
-    // Zoom update
-    const zoomSpeed = 0.002;
-    const deltaZoom = e.deltaY > 0 ? zoomSpeed : -zoomSpeed;
-    setZoom(prev => {
-      const newZoom = Math.max(0, Math.min(1, prev + deltaZoom));
+      const zoomSpeed = 0.002;
+      const deltaZoom = e.deltaY > 0 ? zoomSpeed : -zoomSpeed;
 
-      // After zooming, recalc center so mouseTime stays fixed
-      const newTimeRange = MIN_ZOOM_DURATION * Math.pow(MAX_ZOOM_DURATION / MIN_ZOOM_DURATION, 1 - newZoom);
-      const newStartTime = mouseTime - mouseRatio * newTimeRange;
-      const newCenter = newStartTime + newTimeRange / 2;
+      setZoom(prev => {
+        const newZoom = Math.max(0, Math.min(1, prev + deltaZoom));
+        const newTimeRange = MIN_ZOOM_DURATION *
+          Math.pow(MAX_ZOOM_DURATION / MIN_ZOOM_DURATION, 1 - newZoom);
+        const newStartTime = mouseTime - mouseRatio * newTimeRange;
+        const newCenter = newStartTime + newTimeRange / 2;
 
-      setCenterTime(newCenter);
-      return newZoom;
-    });
+        setCenterTime(newCenter);
+        return newZoom;
+      });
+    }
   }, [centerTime, getTimeRange]);
-
-  // Drag to pan
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
-    setLastMouseX(e.clientX);
-  }, []);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    const deltaX = e.clientX - lastMouseX;
-    const timeRange = getTimeRange();
-    const timeDelta = -(deltaX / window.innerWidth) * timeRange;
-    setCenterTime(prev => prev + timeDelta);
-    setLastMouseX(e.clientX);
-  }, [isDragging, lastMouseX, getTimeRange]);
-
-  const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
   useEffect(() => {
     const timeline = timelineRef.current;
     if (!timeline) return;
     timeline.addEventListener('wheel', handleWheel, { passive: false });
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
     return () => {
       timeline.removeEventListener('wheel', handleWheel);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [handleWheel, handleMouseMove, handleMouseUp]);
+  }, [handleWheel]);
 
   const ticks = generateTicks();
   const timeRange = getTimeRange();
@@ -225,9 +281,7 @@ const ZoomableTimeline = () => {
 
       <div
         ref={timelineRef}
-        className="relative w-full h-full cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        className="relative w-full h-full cursor-default"
       >
         <motion.div
           className="absolute top-8 left-16 bg-white/80 backdrop-blur-md shadow-md rounded-lg px-3 py-1 text-xs text-gray-700 z-50"
@@ -250,7 +304,7 @@ const ZoomableTimeline = () => {
           >
             <div
               className="bg-black w-0.5"
-              style={{ height: `${tick.height}px`, width: `${tick.width}px`,transform: 'translateY(-50%)' }}
+              style={{ height: `${tick.height}px`, transform: 'translateY(-50%)' }}
             ></div>
             <div className="absolute top-6 -translate-x-1/2 text-xs whitespace-nowrap">
               {tick.label}
@@ -365,8 +419,8 @@ const ZoomableTimeline = () => {
 
 
         <div className="absolute bottom-4 right-4 text-gray-400 text-sm">
-          <div>Mouse wheel: Zoom in/out</div>
-          <div>Click & drag: Pan timeline</div>
+          <div>Scroll up/down: Zoom</div>
+          <div>Scroll left/right: Pan timeline</div>
         </div>
 
 

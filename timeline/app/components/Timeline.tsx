@@ -22,7 +22,7 @@ interface Marker {
 
 interface DiaryEntry {
   id: string | number;
-  entry_timedate: string; // ISO string like "2025-08-26T16:37:11.633Z"
+  entry_datetime: string; // ISO string like "2025-08-26T16:37:11.633Z"
   message: string;
   // add other fields if your DB returns them
 }

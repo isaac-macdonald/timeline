@@ -4,7 +4,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useBirthday } from '@/app/context/Context';
 import { useTimeline } from '@/app/context/Context'; // ✅ import global state
 import { motion } from 'framer-motion';
-import HoverLine from '@/app/components/StaticLine';
+import HoverLine from '@/app/components/Entry';
+import { useAuth, useUser } from '@clerk/nextjs';
+import Entry from '@/app/components/Entry';
 
 interface Tick {
   time: number;
@@ -47,8 +49,13 @@ const ZoomableTimeline = () => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; date: Date } | null>(null);
   const [newMarkerDate, setNewMarkerDate] = useState<Date | null>(null);
   const [newMarkerColor, setNewMarkerColor] = useState<string>('#ff0000');
+  const [newEntryDate, setNewEntryDate] = useState<Date | null>(null);
+  const [newEntryMessage, setNewEntryMessage] = useState("");
+  const [entries, setEntries] = useState<any[]>([]);
+  const { user } = useUser();
 
-  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  const [currentTime, setCurrentTime] = useState(0);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   const handleRightClick = (e: React.MouseEvent) => {
@@ -64,9 +71,56 @@ const ZoomableTimeline = () => {
     const clickedTime = startTime + (clickX / containerWidth) * timeRange;
 
     setContextMenu({ x: e.clientX, y: e.clientY, date: new Date(clickedTime) });
-    setNewMarkerDate(new Date(clickedTime));
-    setNewMarkerColor('#ff0000');
+    setNewEntryDate(new Date(clickedTime));
+    setNewEntryMessage("");
   };
+
+  useEffect(() => {
+    if (!user) return; // wait until user is loaded
+    async function loadEntries() {
+      const res = await fetch(`/api/diary_entries?userId=${user?.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setEntries(Array.isArray(data) ? data : []);
+    }
+    loadEntries();
+  }, [user]);
+
+  const handleAddEntry = async () => {
+    if (!newEntryDate || !newEntryMessage.trim()) return;
+
+    try {
+      const res = await fetch("/api/diary_entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: newEntryMessage,
+          date: newEntryDate.toISOString(),
+          userId: user?.id, // Clerk user id
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("Failed to save entry");
+        return;
+      }
+
+      const saved = await res.json();
+      console.log("Saved entry:", saved);
+
+      // ✅ Use the actual saved entry
+      setEntries(prev => [...prev, saved]);
+
+      setContextMenu(null);
+      setNewEntryMessage(""); // optional: clear the input after saving
+      setNewEntryDate(null);  // optional: reset date picker
+    } catch (err) {
+      console.error("Error saving entry:", err);
+    }
+  };
+
+
+
 
   const handleAddMarker = () => {
     if (!newMarkerDate) return;
@@ -259,7 +313,7 @@ const ZoomableTimeline = () => {
   const ticks = generateTicks();
   const timeRange = getTimeRange();
   const startTime = centerTime - timeRange / 2;
-  const currentTimePosition = ((currentTime - startTime) / timeRange) * 100;
+  const currentTimePosition = ((Date.now() - startTime) / timeRange) * 100;
 
   const birthdayPosition =
     birthday != null ? ((birthday.getTime() - startTime) / timeRange) * 100 : null;
@@ -382,45 +436,51 @@ const ZoomableTimeline = () => {
           <div>Scroll left/right: Pan timeline</div>
         </div>
 
-        {markers.map((marker, idx) => (
-          <HoverLine
-            key={idx}
-            referenceDateString={`${marker.date.getDate()}-${marker.date.getMonth() + 1}-${marker.date.getFullYear()}`}
-            lineColor={marker.color}
-            textColor={marker.color}
+        {entries.map(entry => (
+          <Entry
+            key={entry.id}
+            id={entry.id}
+            date={entry.entry_datetime}
+            message={entry.message}
+            lineColor="blue"
+            textColor="black"
           />
         ))}
 
-        {/* Context menu */}
         {contextMenu && (
           <div
             className="absolute bg-white shadow-md rounded-md p-2 z-50"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
-            <div className="mb-2 font-semibold">Add Marker</div>
+            <div className="mb-2 font-semibold">New Diary Entry</div>
+
+            {/* Date */}
             <div className="mb-2">
               <label className="block text-xs font-medium">Date:</label>
               <input
                 type="date"
-                value={newMarkerDate?.toISOString().slice(0, 10)}
-                onChange={e => setNewMarkerDate(new Date(e.target.value))}
+                value={newEntryDate?.toISOString().slice(0, 10)}
+                onChange={e => setNewEntryDate(new Date(e.target.value))}
                 className="border px-1 py-0.5 text-sm w-full"
               />
             </div>
+
+            {/* Message */}
             <div className="mb-2">
-              <label className="block text-xs font-medium">Color:</label>
-              <input
-                type="color"
-                value={newMarkerColor}
-                onChange={e => setNewMarkerColor(e.target.value)}
-                className="w-full h-6 p-0 border-none"
+              <label className="block text-xs font-medium">Message:</label>
+              <textarea
+                value={newEntryMessage}
+                onChange={e => setNewEntryMessage(e.target.value)}
+                className="border px-1 py-0.5 text-sm w-full"
+                rows={3}
               />
             </div>
+
             <button
               className="bg-blue-500 text-white px-2 py-1 rounded text-sm hover:bg-blue-600"
-              onClick={handleAddMarker}
+              onClick={handleAddEntry}
             >
-              Add
+              Save
             </button>
             <button
               className="ml-2 bg-gray-300 text-black px-2 py-1 rounded text-sm hover:bg-gray-400"
@@ -430,6 +490,7 @@ const ZoomableTimeline = () => {
             </button>
           </div>
         )}
+
 
       </div>
     </div>

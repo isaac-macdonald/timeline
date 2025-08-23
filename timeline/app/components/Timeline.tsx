@@ -20,6 +20,13 @@ interface Marker {
   color: string;
 }
 
+interface DiaryEntry {
+  id: string | number;
+  entry_timedate: string; // ISO string like "2025-08-26T16:37:11.633Z"
+  message: string;
+  // add other fields if your DB returns them
+}
+
 const TIME_UNITS = [
   { name: 'millennia', ms: 1000 * 60 * 60 * 24 * 365.25 * 1000 },
   { name: 'centuries', ms: 1000 * 60 * 60 * 24 * 365.25 * 100 },
@@ -51,7 +58,7 @@ const ZoomableTimeline = () => {
   const [newMarkerColor, setNewMarkerColor] = useState<string>('#ff0000');
   const [newEntryDate, setNewEntryDate] = useState<Date | null>(null);
   const [newEntryMessage, setNewEntryMessage] = useState("");
-  const [entries, setEntries] = useState<any[]>([]);
+  const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const { user } = useUser();
 
 

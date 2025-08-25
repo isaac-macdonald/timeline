@@ -2,26 +2,6 @@
 "use client";
 import React, { createContext, useContext, useMemo, useState, ReactNode } from "react";
 
-/* ====================== Birthday ====================== */
-type BirthdayContextType = {
-  birthday: Date | null;
-  setBirthday: (date: Date | null) => void;
-};
-
-const BirthdayContext = createContext<BirthdayContextType | undefined>(undefined);
-
-export const BirthdayProvider = ({ children }: { children: ReactNode }) => {
-  const [birthday, setBirthday] = useState<Date | null>(null);
-  const value = useMemo(() => ({ birthday, setBirthday }), [birthday]);
-  return <BirthdayContext.Provider value={value}>{children}</BirthdayContext.Provider>;
-};
-
-export const useBirthday = () => {
-  const ctx = useContext(BirthdayContext);
-  if (!ctx) throw new Error("useBirthday must be used inside BirthdayProvider");
-  return ctx;
-};
-
 /* ====================== Timeline ====================== */
 export const MIN_ZOOM_DURATION = 60 * 1000; // 1 minute
 export const MAX_ZOOM_DURATION = 3000 * 365.25 * 24 * 60 * 60 * 1000; // ~3000 years
@@ -83,6 +63,6 @@ export const useTimeline = () => {
 /* ====================== One wrapper to use in layout ====================== */
 export const AppProviders = ({ children }: { children: ReactNode }) => (
   <TimelineProvider>
-    <BirthdayProvider>{children}</BirthdayProvider>
+    {children}
   </TimelineProvider>
 );

@@ -34,3 +34,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+# TODO
+ - Fix hitbox issue between entries
+ - Add different colours to entries
+ - Add better styling to the entries
+ - Style the create entry modal
+ - Add the ability to delete entries
+ - Add better error checking and handling in API
+ - Add toasts to notify when request has been sent to handle in background.

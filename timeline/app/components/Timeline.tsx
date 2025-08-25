@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useBirthday } from '@/app/context/Context';
 import { useTimeline } from '@/app/context/Context'; // ✅ import global state
 import { motion } from 'framer-motion';
 import HoverLine from '@/app/components/Entry';
 import { useAuth, useUser } from '@clerk/nextjs';
 import Entry from '@/app/components/Entry';
+import AddEntry from '@/app/components/AddEntry';
 
 interface Tick {
   time: number;
@@ -24,6 +24,7 @@ interface DiaryEntry {
   id: string | number;
   entry_datetime: string; // ISO string like "2025-08-26T16:37:11.633Z"
   message: string;
+  colour: string;
   // add other fields if your DB returns them
 }
 
@@ -43,7 +44,6 @@ const MAX_ZOOM_DURATION = 3000 * 365.25 * 24 * 60 * 60 * 1000;
 const MS_PER_YEAR = 1000 * 60 * 60 * 24 * 365.25;
 
 const ZoomableTimeline = () => {
-  const { birthday } = useBirthday();
   const {
     zoom,
     setZoom,
@@ -52,13 +52,9 @@ const ZoomableTimeline = () => {
     getTimeRange
   } = useTimeline(); // ✅ now reading/writing from context
 
-  const [markers, setMarkers] = useState<Marker[]>([]);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; date: Date } | null>(null);
-  const [newMarkerDate, setNewMarkerDate] = useState<Date | null>(null);
-  const [newMarkerColor, setNewMarkerColor] = useState<string>('#ff0000');
-  const [newEntryDate, setNewEntryDate] = useState<Date | null>(null);
-  const [newEntryMessage, setNewEntryMessage] = useState("");
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
+  const [showAddEntry, setShowAddEntry] = useState<Date | null>(null);
+
   const { user } = useUser();
 
 
@@ -77,9 +73,7 @@ const ZoomableTimeline = () => {
     const startTime = centerTime - timeRange / 2;
     const clickedTime = startTime + (clickX / containerWidth) * timeRange;
 
-    setContextMenu({ x: e.clientX, y: e.clientY, date: new Date(clickedTime) });
-    setNewEntryDate(new Date(clickedTime));
-    setNewEntryMessage("");
+    setShowAddEntry(new Date(clickedTime));
   };
 
   useEffect(() => {
@@ -93,17 +87,16 @@ const ZoomableTimeline = () => {
     loadEntries();
   }, [user]);
 
-  const handleAddEntry = async () => {
-    if (!newEntryDate || !newEntryMessage.trim()) return;
-
+  const handleAddEntry = async (message: string, date: Date, colour: string) => {
     try {
       const res = await fetch("/api/diary_entry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: newEntryMessage,
-          date: newEntryDate.toISOString(),
-          userId: user?.id, // Clerk user id
+          message,
+          date: date.toLocaleString("sv-SE"),
+          userId: user?.id,
+          colour: colour,
         }),
       });
 
@@ -113,26 +106,11 @@ const ZoomableTimeline = () => {
       }
 
       const saved = await res.json();
-      console.log("Saved entry:", saved);
-
-      // ✅ Use the actual saved entry
       setEntries(prev => [...prev, saved]);
-
-      setContextMenu(null);
-      setNewEntryMessage(""); // optional: clear the input after saving
-      setNewEntryDate(null);  // optional: reset date picker
+      setShowAddEntry(null);
     } catch (err) {
       console.error("Error saving entry:", err);
     }
-  };
-
-
-
-
-  const handleAddMarker = () => {
-    if (!newMarkerDate) return;
-    setMarkers(prev => [...prev, { date: newMarkerDate, color: newMarkerColor }]);
-    setContextMenu(null);
   };
 
   useEffect(() => {
@@ -322,33 +300,9 @@ const ZoomableTimeline = () => {
   const startTime = centerTime - timeRange / 2;
   const currentTimePosition = ((Date.now() - startTime) / timeRange) * 100;
 
-  const birthdayPosition =
-    birthday != null ? ((birthday.getTime() - startTime) / timeRange) * 100 : null;
-
-  function formatDatePretty(date: Date) {
-    const day = date.getDate();
-    const suffix =
-      day % 10 === 1 && day !== 11 ? "st" :
-        day % 10 === 2 && day !== 12 ? "nd" :
-          day % 10 === 3 && day !== 13 ? "rd" : "th";
-    const month = date.toLocaleString("default", { month: "long" });
-    const year = date.getFullYear();
-    return `${day}${suffix} ${month} ${year}`;
-  }
-
   return (
     <div className="w-full h-screen bg-white text-black overflow-hidden">
       <div ref={timelineRef} onContextMenu={handleRightClick} className="relative w-full h-full cursor-default">
-        <motion.div
-          className="absolute top-8 left-16 bg-white/80 backdrop-blur-md shadow-md rounded-lg px-3 py-1 text-xs text-gray-700 z-50"
-          initial={{ opacity: 0, y: -5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <span className="font-semibold">Time range:</span>{" "}
-          {formatDatePretty(new Date(startTime))} –{" "}
-          {formatDatePretty(new Date(centerTime + getTimeRange() / 2))}
-        </motion.div>
 
         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-black"></div>
 
@@ -368,46 +322,16 @@ const ZoomableTimeline = () => {
           </div>
         ))}
 
-        {birthdayPosition !== null &&
-          birthdayPosition >= 0 &&
-          birthdayPosition <= 100 && (
-            <div
-              className="absolute top-1/2 w-0.5 bg-blue-500 z-10"
-              style={{
-                left: `${birthdayPosition}%`,
-                height: "100%",
-                transform: "translateY(-50%)",
-              }}
-            >
-              <div className="absolute -top-8 -translate-x-1/2 text-blue-400 text-xs font-bold whitespace-nowrap">
-                BIRTHDAY
-              </div>
-            </div>
-          )}
-
-        {birthdayPosition !== null &&
-          currentTimePosition >= 0 &&
-          currentTimePosition <= 100 &&
-          birthdayPosition >= 0 &&
-          birthdayPosition <= 100 && (
-            <div
-              className="absolute top-0 h-full bg-red-200 opacity-40 z-10"
-              style={{
-                left: `${Math.min(currentTimePosition, birthdayPosition)}%`,
-                width: `${Math.abs(currentTimePosition - birthdayPosition)}%`,
-              }}
-            />
-          )}
-
         {currentTimePosition !== null &&
           currentTimePosition >= 0 &&
           currentTimePosition <= 100 && (
             <div
-              className="absolute top-1/2 w-0.5 bg-gray-500 z-10"
+              className="absolute top-1/2 w-0.5 bg-gray-500"
               style={{
                 left: `${currentTimePosition}%`,
                 height: "100%",
                 transform: "translateY(-50%)",
+                zIndex: 0
               }}
             />
           )}
@@ -422,7 +346,7 @@ const ZoomableTimeline = () => {
               }}
             />
             <div
-              className="absolute top-2 text-gray-400 z-10"
+              className="absolute top-2 text-gray-400 z-0"
               style={{
                 left: `${currentTimePosition}%`,
                 transform: 'translateX(-102%)',
@@ -431,6 +355,7 @@ const ZoomableTimeline = () => {
                 fontSize: '18px',
                 fontFamily: 'Arial, sans-serif',
                 whiteSpace: 'nowrap',
+
               }}
             >
               THE UNSTOPPABLE MARCH OF TIME
@@ -449,55 +374,19 @@ const ZoomableTimeline = () => {
             id={entry.id}
             date={entry.entry_datetime}
             message={entry.message}
-            lineColor="blue"
-            textColor="black"
+            colour={entry.colour}
           />
         ))}
 
-        {contextMenu && (
-          <div
-            className="absolute bg-white shadow-md rounded-md p-2 z-50"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <div className="mb-2 font-semibold">New Diary Entry</div>
-
-            {/* Date */}
-            <div className="mb-2">
-              <label className="block text-xs font-medium">Date:</label>
-              <input
-                type="date"
-                value={newEntryDate?.toISOString().slice(0, 10)}
-                onChange={e => setNewEntryDate(new Date(e.target.value))}
-                className="border px-1 py-0.5 text-sm w-full"
-              />
-            </div>
-
-            {/* Message */}
-            <div className="mb-2">
-              <label className="block text-xs font-medium">Message:</label>
-              <textarea
-                value={newEntryMessage}
-                onChange={e => setNewEntryMessage(e.target.value)}
-                className="border px-1 py-0.5 text-sm w-full"
-                rows={3}
-              />
-            </div>
-
-            <button
-              className="bg-blue-500 text-white px-2 py-1 rounded text-sm hover:bg-blue-600"
-              onClick={handleAddEntry}
-            >
-              Save
-            </button>
-            <button
-              className="ml-2 bg-gray-300 text-black px-2 py-1 rounded text-sm hover:bg-gray-400"
-              onClick={() => setContextMenu(null)}
-            >
-              Cancel
-            </button>
-          </div>
+        {showAddEntry && (
+          <AddEntry
+            date={showAddEntry}
+            onSave={handleAddEntry}
+            onCancel={() => setShowAddEntry(null)}
+            lineColor="blue"
+            textColor="black"
+          />
         )}
-
 
       </div>
     </div>

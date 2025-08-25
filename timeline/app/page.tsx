@@ -32,11 +32,6 @@ export default function Home() {
           </SignInButton>
         </SignedOut>
       </div>
-
-      {/* Hamburger menu - also positioned absolutely on top */}
-      <div className="absolute z-50">
-        <HamburgerMenu />
-      </div>
     </div>
   );
 }

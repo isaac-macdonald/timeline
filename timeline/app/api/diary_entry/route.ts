@@ -22,12 +22,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(request: Request) {
-  const { message, date, userId } = await request.json();
+  const { message, date, userId, colour } = await request.json();
 
   try {
     const inserted = await sql`
-      INSERT INTO diary_entries (user_id, entry_datetime, message)
-      VALUES (${userId}, ${date}, ${message})
+      INSERT INTO diary_entries (user_id, entry_datetime, message, colour)
+      VALUES (${userId}, ${date}, ${message}, ${colour})
       RETURNING *;
     `;
     return NextResponse.json(inserted[0]);
